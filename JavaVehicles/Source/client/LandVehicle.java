@@ -1,4 +1,4 @@
-package display2D;
+package client;
 
 import java.awt.Color;
 import java.awt.Graphics;
@@ -6,57 +6,57 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.Random;
 
-import javax.persistence.Entity;
-
-import display2D.Vehicle.bearings;
-
 /**
  * The LandVehicle class extends the vehicle class and moves like a Land Vehicle with controls such as steering, a gas pedal and brake pedal.
  * The only methods that are public are the controls for the vehicle and the constructors.
  * @author Erich
  *
  */
-@Entity
 public class LandVehicle extends Vehicle implements KeyListener {
 	private double gasPedal, brakePedal;
 	private double gasPedalLimit = 100;
 	private double brakePedalLimit = 100;
 	public enum steering {LEFT, CENTER, RIGHT};
-	private boolean gasPressed = false;
-	private boolean brakePressed = false;
+	
+	Random r = new Random();
+	
+	private int sizeL = 10;
+	private int sizeW = 10;
 	
 	/**
 	 * This constructor initializes x, y and the direction of the LandVehicle to random values and sets the pitch and z to zero.
 	 * It takes a string to name the vehicle so it may be identified.
-	 * @param model - The name of the vehicle.
+	 * @param model The name of the vehicle.
 	 */
 	public LandVehicle(String model) { 
-		Random r = new Random();
 		this.model = model;
-		this.x = (double)r.nextInt(xUpLimit) + xLowLimit;
-		this.y = (double)r.nextInt(yUpLimit) + yLowLimit;
-		this.z = 0;
-		this.direction = (double)r.nextInt(directionBound);
-		this.pitch = 0;
+		setX((double)r.nextInt(xUpLimit) + xLowLimit);
+		setY((double)r.nextInt(yUpLimit) + yLowLimit);
+		setZ(0);
+		setDir((double)r.nextInt(directionBound));
+		setPitch(0);
 	}
 	
 	/**
-	 * This constructor is used to for testing mostly. It allows the LandVehicle to be initialized with specified values, except pitch.
-	 * @param model - The name of the vehicle.
-	 * @param x - The x position of the vehicle.
-	 * @param y - The y position of the vehicle.
-	 * @param z - The z position of the vehicle.
-	 * @param direction - The direction the vehicle is heading.
+	 * This constructor is used when the vehicle is created from NetworkVehicle data passed in
+	 * from the network.
+	 * @param model the name of the vehicle
+	 * @param x the location on the x-axis
+	 * @param y the location on the y-axis
+	 * @param z the location on the z-axis
+	 * @param speed the speed the vehicle is traveling at
+	 * @param acceleration the acceleration the vehicle is carrying
+	 * @param direction the direction the vehicle is heading
 	 */
 	public LandVehicle(String model, double x, double y, double z, double speed, double acceleration, double direction) {
 		this.model = model;
-		this.x = x;
-		this.y = y;
-		this.z = z;
-		this.speed = speed;
-		this.acceleration = acceleration;
-		this.direction = direction;
-		this.pitch = 0;
+		setX(x);
+		setY(y);
+		setZ(z);
+		setSpeed(speed);
+		setAccel(acceleration);
+		setDir(direction);
+		setPitch(0);
 	}
 	
 	/**
@@ -64,7 +64,7 @@ public class LandVehicle extends Vehicle implements KeyListener {
 	 * is being pressed.
 	 */
 	private void accelerate() {
-		this.acceleration += this.gasPedal / 10;
+		setAccel(getAccel() + gasPedal / 10);
 	}
 	
 	/**
@@ -72,7 +72,7 @@ public class LandVehicle extends Vehicle implements KeyListener {
 	 * pedal is being pressed.
 	 */
 	private void decelerate() {
-		this.acceleration -= this.brakePedal / 10;
+		setAccel(getAccel() - brakePedal / 10);
 	}
 	
 	/**
@@ -82,10 +82,10 @@ public class LandVehicle extends Vehicle implements KeyListener {
 	 */
 	public void steer(steering in) {
 		if(in == steering.LEFT)
-			this.direction--;
+			decrementDir();
 		if(in == steering.RIGHT)
-			this.direction++;
-		this.directionCheck();
+			incrementDir();
+		directionCheck();
 	}
 	
 	/**
@@ -93,12 +93,10 @@ public class LandVehicle extends Vehicle implements KeyListener {
 	 * until it reaches its limit and sets the brake pedal value to zero.
 	 */
 	public void pressGas() {
-		this.gasPressed = true;
-		this.brakePressed = false;
-		this.brakePedal = 0;
-		if(this.gasPedal < this.gasPedalLimit)
-			this.gasPedal++;
-		this.accelerate();
+		brakePedal = 0;
+		if(gasPedal < gasPedalLimit)
+			gasPedal++;
+		accelerate();
 	}
 	
 	/**
@@ -106,24 +104,16 @@ public class LandVehicle extends Vehicle implements KeyListener {
 	 * until it reaches its limit and sets the gas pedal value to zero.
 	 */
 	public void pressBrake() {
-		this.gasPressed = false;
-		this.brakePressed = true;
-		this.gasPedal = 0;
-		if(this.brakePedal < this.brakePedalLimit)
-			this.brakePedal++;
-		this.decelerate();
+		gasPedal = 0;
+		if(brakePedal < brakePedalLimit)
+			brakePedal++;
+		decelerate();
 	}
 
 	@Override
 	public void paint(Graphics g)  {
-		int sizeL = 10;
-		int sizeW = 10;
-//		if(this.bearing == bearings.EAST || this.bearing == bearings.WEST) {
-//			sizeL = 10;
-//			sizeW = 20;
-//		}
 		g.setColor(Color.BLUE);
-		g.fillRect((int)this.x, (int)this.y, (int)(sizeW * ((z/100) + 1)), (int)(sizeL * ((z/100) + 1)));
+		g.fillRect((int)getX(), (int)getY(), (int)(sizeW * ((getZ()/100) + 1)), (int)(sizeL * ((getZ()/100) + 1)));
 	}
 
 	@Override
@@ -131,16 +121,16 @@ public class LandVehicle extends Vehicle implements KeyListener {
 		int key = e.getKeyCode();
 		
 		if(key == KeyEvent.VK_W) {
-			this.pressGas();
+			pressGas();
 		}
 		if(key == KeyEvent.VK_S) {
-			this.pressBrake();
+			pressBrake();
 		}
 		if(key == KeyEvent.VK_A) {
-			this.steer(steering.LEFT);
+			steer(steering.LEFT);
 		}
 		if(key == KeyEvent.VK_D) {
-			this.steer(steering.RIGHT);
+			steer(steering.RIGHT);
 		}
 	}
 
@@ -149,10 +139,10 @@ public class LandVehicle extends Vehicle implements KeyListener {
 		int key = e.getKeyCode();
 		
 		if(key == KeyEvent.VK_A) {
-			this.steer(steering.CENTER);
+			steer(steering.CENTER);
 		}
 		if(key == KeyEvent.VK_D) {
-			this.steer(steering.CENTER);
+			steer(steering.CENTER);
 		}
 		
 	}
@@ -165,27 +155,22 @@ public class LandVehicle extends Vehicle implements KeyListener {
 
 	@Override
 	public void collide() {
-		if(this.direction >= 180)
-			this.direction -= 180;
+		double tempDir = getDir();
+		if(getDir() >= 180)
+			setDir(tempDir - 180);
 		else
-			this.direction += 180;
-		this.acceleration = -10;
-	}
-	
-	@Override
-	public void crash(Vehicle them) {
-		if(this.speed > them.speed)
-			this.speed -= them.speed;
-		else {
-			this.collide();
-			this.speed = them.speed;
-		}
-		this.acceleration = -10;
-		crashed = true;
+			setDir(tempDir + 180);
+		setAccel(-10);
 	}
 
 	@Override
 	public void doSpecificThings() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void crash() {
 		// TODO Auto-generated method stub
 		
 	}

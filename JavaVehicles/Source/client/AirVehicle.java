@@ -1,4 +1,4 @@
-package display2D;
+package client;
 
 import java.awt.Color;
 import java.awt.Graphics;
@@ -6,71 +6,76 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.Random;
 
-import javax.persistence.Entity;
-
 /**
  * The AirVehicle class extends the vehicle class and moves like an Air Vehicle with controls such as banking, pitching, pedaling faster and pedaling slower.
  * The only methods that are public are the controls for the vehicle and the constructors.
  * @author Erich
  *
  */
-@Entity
 public class AirVehicle extends Vehicle implements KeyListener{
 	private double pedalSpeed;
 	private double pedalSpeedLimit = 100;
 	public enum banking {LEFT, CENTER, RIGHT};
 	public enum pitching {UP, CENTER, DOWN};
 	
+	Random r = new Random();
+	
+	private int sizeL = 10;
+	private int sizeW = 10;
+	
 	/**
 	 * This constructor initializes x, y, z and the direction of the AirVehicle to random values and sets the pitch to zero.
 	 * It takes a string to name the vehicle so it may be identified.
-	 * @param model - The name of the vehicle.
+	 * @param model The name of the vehicle.
 	 */
 	public AirVehicle(String model) {
-		Random r = new Random();
 		this.model = model;
-		this.x = (double)r.nextInt(xUpLimit) + xLowLimit;
-		this.y = (double)r.nextInt(yUpLimit) + yLowLimit;
-		this.z = (double)(r.nextInt(zUpLimit - -10) + 10);
-		this.direction = (double)r.nextInt(directionBound);
-		this.pitch = 0;
+		setX((double)r.nextInt(xUpLimit) + xLowLimit);
+		setY((double)r.nextInt(yUpLimit) + yLowLimit);
+		setZ((double)(r.nextInt(zUpLimit - -10) + 10));
+		setDir((double)r.nextInt(directionBound));
+		setPitch(0);
 	}
 	
 	/**
-	 * This constructor is used to for testing mostly. It allows the AirVehicle to be initialized with specified values, except pitch.
-	 * @param model - The name of the vehicle.
-	 * @param x - The x position of the vehicle.
-	 * @param y - The y position of the vehicle.
-	 * @param z - The z position of the vehicle.
-	 * @param direction - The direction the vehicle is heading.
+	 * This constructor is used when the vehicle is created from NetworkVehicle data passed in
+	 * from the network.
+	 * @param model the name of the vehicle
+	 * @param x the location on the x-axis
+	 * @param y the location on the y-axis
+	 * @param z the location on the z-axis
+	 * @param speed the speed the vehicle is traveling at
+	 * @param acceleration the acceleration the vehicle is carrying
+	 * @param direction the direction the vehicle is heading
 	 */
 	public AirVehicle(String model, double x, double y, double z, double speed, double acceleration, double direction) {
 		this.model = model;
-		this.x = x;
-		this.y = y;
-		this.z = z;
-		this.speed = speed;
-		this.acceleration = acceleration;
-		this.direction = direction;
-		this.pitch = 0;
+		setX(x);
+		setY(y);
+		setZ(z);
+		setSpeed(speed);
+		setAccel(acceleration);
+		setDir(direction);
+		setPitch(0);
 	}
 	
 	/**
 	 * The Pedals method takes the pedal input from the user and increments or decrements acceleration accordingly.
 	 */
 	private void pedals() {
+		double tempAccel = getAccel();
 		if(pedalSpeed > 50) {
-			if(this.acceleration < 0)
-				this.acceleration = 0;
-			this.acceleration += (50 - (pedalSpeed / 2)) / 10;
+			if(tempAccel < 0)
+				setAccel(0);
+			setAccel(tempAccel + (50 - (pedalSpeed / 2)) / 10);
 		}
 		if(pedalSpeed < 50) {
-			if(this.acceleration > 0)
-				this.acceleration = 0;
-			this.acceleration -= (50 - (pedalSpeed / 2)) / 10;
+			if(tempAccel > 0)
+				setAccel(0);
+			setAccel(getAccel() - (50 - (pedalSpeed / 2)) / 10);
 		}
 		if(pedalSpeed == 50) {
-			this.acceleration = 0;
+			setAccel(0);
 		}
 	}
 	
@@ -79,8 +84,8 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 * it is called until it reaches the pedalSpeedLimit.
 	 */
 	public void pedalFaster() {
-		if(this.pedalSpeed < pedalSpeedLimit)
-			this.pedalSpeed++;
+		if(pedalSpeed < pedalSpeedLimit)
+			pedalSpeed++;
 		landed = false;
 		pedals();
 	}
@@ -90,8 +95,8 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 * zero which is the slowest the pedals can go.
 	 */
 	public void pedalSlower() {
-		if(this.pedalSpeed > 0)
-			this.pedalSpeed--;
+		if(pedalSpeed > 0)
+			pedalSpeed--;
 		pedals();
 	}
 	
@@ -103,10 +108,10 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 */
 	public void bank(banking in) {
 		if(in == banking.LEFT)
-			this.direction--;
+			decrementDir();
 		if(in == banking.RIGHT)
-			this.direction++;
-		this.directionCheck();
+			incrementDir();
+		directionCheck();
 	}
 	
 	/**
@@ -116,9 +121,9 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 */
 	public void pitch(pitching in) {
 		if(in == pitching.UP)
-			this.rise();
+			rise();
 		if(in == pitching.DOWN)
-			this.fall();
+			fall();
 	}
 	
 	/**
@@ -126,9 +131,9 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 * the pitch value by one.
 	 */
 	private void fall() {
-		if(this.pitch > this.pitchLowerLimit)
-			this.pitch--;
-		this.isPitching = true;
+		if(getPitch() > pitchLowerLimit)
+			decrementPitch();
+		isPitching = true;
 	}
 	
 	/**
@@ -136,9 +141,9 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 * the pitch value by one.
 	 */
 	private void rise() {
-		if(this.pitch < this.pitchUpperLimit)
-			this.pitch++;
-		this.isPitching = true;
+		if(getPitch() < pitchUpperLimit)
+			incrementPitch();
+		isPitching = true;
 	}
 	
 	/**
@@ -147,13 +152,13 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 * that the AirVehicle does not crash. If it is going too fast it will crash, otherwise it will stop on the ground unharmed.
 	 */
 	private void land() {
-		if(this.speed >= 5)
-			crash(this);
-		this.acceleration = 0;
-		this.speed = 0;
-		this.pedalSpeed = 0;
-		this.pitch = 0;
-		this.z = 0;
+		if(getSpeed() >= 5)
+			crash();
+		setAccel(0);
+		setSpeed(0);
+		pedalSpeed = (0);
+		setPitch(0);
+		setZ(0);
 		landed = true;
 	}
 	
@@ -163,7 +168,7 @@ public class AirVehicle extends Vehicle implements KeyListener{
 	 */
 	private boolean checkIfLanded() {
 		if(!landed) {
-			if(this.z <= groundLevel + 5)
+			if(getZ() <= groundLevel + 5)
 				return true;
 		}
 		return false;
@@ -171,17 +176,11 @@ public class AirVehicle extends Vehicle implements KeyListener{
 
 	@Override
 	public void paint(Graphics g)  {
-		int sizeL = 10;
-		int sizeW = 10;
-//		if(this.bearing == bearings.EAST || this.bearing == bearings.WEST) {
-//			sizeL = 10;
-//			sizeW = 20;
-//		}
 		if(crashed)
 			g.setColor(Color.BLACK);
 		else
 			g.setColor(Color.RED);
-		g.fillOval((int)this.x, (int)this.y, (int)(sizeL * ((z/25) + 1)), (int)(sizeW * ((z/25) + 1)));
+		g.fillOval((int)getX(), (int)getY(), (int)(sizeL * ((getZ()/25) + 1)), (int)(sizeW * ((getZ()/25) + 1)));
 	}
 
 	@Override
@@ -189,22 +188,22 @@ public class AirVehicle extends Vehicle implements KeyListener{
 		int key = e.getKeyCode();
 		
 		if(key == KeyEvent.VK_W) {
-			this.pitch(pitching.DOWN);
+			pitch(pitching.DOWN);
 		}
 		if(key == KeyEvent.VK_S) {
-			this.pitch(pitching.UP);
+			pitch(pitching.UP);
 		}
 		if(key == KeyEvent.VK_A) {
-			this.bank(banking.LEFT);
+			bank(banking.LEFT);
 		}
 		if(key == KeyEvent.VK_D) {
-			this.bank(banking.RIGHT);
+			bank(banking.RIGHT);
 		}
 		if(key == KeyEvent.VK_Q) {
-			this.pedalFaster();
+			pedalFaster();
 		}
 		if(key == KeyEvent.VK_Z) {
-			this.pedalSlower();
+			pedalSlower();
 		}
 	}
 
@@ -213,10 +212,10 @@ public class AirVehicle extends Vehicle implements KeyListener{
 		int key = e.getKeyCode();
 		
 		if(key == KeyEvent.VK_A) {
-			this.bank(banking.CENTER);
+			bank(banking.CENTER);
 		}
 		if(key == KeyEvent.VK_D) {
-			this.bank(banking.CENTER);
+			bank(banking.CENTER);
 		}
 		
 	}
@@ -229,31 +228,25 @@ public class AirVehicle extends Vehicle implements KeyListener{
 
 	@Override
 	public void collide() {
-		if(this.direction >= 180)
-			this.direction -= 180;
+		double tempDir = getDir();
+		if(getDir() >= 180)
+			setDir(tempDir - 180);
 		else
-			this.direction += 180;
-		this.pitch = -this.pitch;
-	}
-	
-	@Override
-	public void crash(Vehicle them) {
-		if(this != them) {
-			if(this.speed > them.speed)
-				this.speed -= them.speed;
-			else {
-				this.collide();
-				this.speed = them.speed;
-			}
-		}
-		this.pitch = pitchLowerLimit;
-		crashed = true;
+			setDir(tempDir + 180);
+		setPitch(-getPitch());
+		crash();
 	}
 
 	@Override
 	public void doSpecificThings() {
 		if(checkIfLanded())
-			this.land();
+			land();
+	}
+
+	@Override
+	public void crash() {
+		setPitch(pitchLowerLimit);
+		crashed = true;
 	}
 
 }

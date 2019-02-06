@@ -1,6 +1,5 @@
-package display2D;
+package client;
 
-import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsConfiguration;
@@ -14,8 +13,11 @@ import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
+import java.net.InetAddress;
+import java.net.Socket;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Observable;
+import java.util.Observer;
 import java.util.Random;
 
 //Imports are listed in full to show what's being used
@@ -23,45 +25,58 @@ import java.util.Random;
 
 import javax.swing.JPanel;
 
+import common.NetReader;
+import common.NetWriter;
+import common.NetworkCommand;
+import common.NetworkVehicle;
+import common.Type;
+
 /**
  * The DrawHere class takes care of initializing and running all of the threads in the app.
  * It is also where the objects are drawn onto the buffer.
  * @author Erich
  */
 @SuppressWarnings("serial")
-public class DrawHere extends JPanel implements ActionListener, KeyListener, MouseListener {
+public class DrawHere extends JPanel implements ActionListener, KeyListener, MouseListener, Observer {
 	
-	private int modNum = 0;
-	private Vehicle currentVehicleInControl = null;
-	private Vehicle previousVehicleInControl = null;
+	private String server;
+	private InetAddress address;
+	private Socket sock;
+	private static final int TIMEOUT = 0;
+	
+	String myIP;
+	NetWriter sender;
 
 	protected int screenH, screenW;
 	private ArrayList<Vehicle> allVehicles;
 	
 	private Random rand;
-	private Database db;
 	
 	/**
-	 * The DrawHere contructor initializes all of the objects that will be
-	 * bouncing around on the JFrame as well as the background for the scene.
+	 * The constructor for DrawHere initializes the vehicles array and its NetWriter and NetReader to get vehicles from the network.
+	 * @param server The server that the client must connect to.
 	 */
-	public DrawHere() {
+	public DrawHere(String server) {
+		allVehicles = new ArrayList<Vehicle>();
+		this.server = server;
 		rand = new Random();
 		
-		db = new Database("db_file.odb");
-		
-		allVehicles = new ArrayList<Vehicle>();
-		
-		getdbVehicles();
-		
-		if(!allVehicles.isEmpty()) {
-			String lastModel = allVehicles.get(allVehicles.size() - 1).model;
-			String modNumString = lastModel.substring(lastModel.length() - 1, lastModel.length());
-			if(modNumString.startsWith(" "))
-				modNum = Integer.parseInt(modNumString.substring(2)) + 1;
-			else
-				modNum = Integer.parseInt(modNumString) + 1;
+		try {
+			address = (InetAddress.getByName(this.server));
+			sock = new Socket(address, NetworkVehicle.serverport);
+			sock.setSoTimeout(TIMEOUT);
+			myIP = sock.getLocalAddress().toString();
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
+		
+		sender = new NetWriter(sock);
+		sender.start();
+		
+		NetReader getter = new NetReader(sock);
+		(new Thread(getter)).start();
+		
+		getter.addObserver(this);
 		
 		Rectangle screenBounds = getScreenTotalArea(null);
 		screenH = (int) screenBounds.height;
@@ -109,21 +124,16 @@ public class DrawHere extends JPanel implements ActionListener, KeyListener, Mou
 		}
 	}
 	
+	/**
+	 * Responsible for running through the ArrayList of vehicles and calling checkCollision on them
+	 * to see if they are colliding with each other. Called every tick of the timer in 'actionPerformed'.
+	 */
 	private void doCollsionChecks() {
 		for(Vehicle first : allVehicles) {
 			for(Vehicle second : allVehicles) {
 				if(first.checkCollision(second)) {
-					if(first instanceof AirVehicle) {
-						first.crash(second);
-						this.removeKeyListener(first);
-					} else
-						first.collide();
-					
-					if(second instanceof AirVehicle) {
-						second.crash(first);
-						this.removeKeyListener(second);
-					} else
-						second.collide();
+					first.collide();
+					second.collide();
 				}
 			}
 		}
@@ -141,17 +151,6 @@ public class DrawHere extends JPanel implements ActionListener, KeyListener, Mou
 		 
 		 if(key == KeyEvent.VK_SPACE)
 			 removeAllVehicles();
-	}
-
-	@Override
-	public void keyReleased(KeyEvent e) {
-		int key = e.getKeyCode();
-		
-		if(key == KeyEvent.VK_TAB)
-			 controlNextVehicle();
-		 
-		 if(key == KeyEvent.VK_BACK_SPACE)
-			 controlPreviousVehicle();
 	}
 
 	@Override
@@ -207,6 +206,10 @@ public class DrawHere extends JPanel implements ActionListener, KeyListener, Mou
 		}
 	}
 	
+	/**
+	 * Removes a random vehicle from the ArrayList by choosing a random number between 0 and the current size of 
+	 * the array of vehicles and then removing the vehicle at that index.
+	 */
 	private void removeRandomVehicle() {
 		int size = allVehicles.size();
 		
@@ -214,70 +217,32 @@ public class DrawHere extends JPanel implements ActionListener, KeyListener, Mou
 			allVehicles.remove(rand.nextInt(size));
 	}
 	
+	/**
+	 * Converts an Air Vehicle to a Network Vehicle and sends it over the network so the server can distribute the data to all clients.
+	 */
 	private void addAirVehicle() {
-		AirVehicle newAirV = new AirVehicle("Model " + modNum++);
-		allVehicles.add(newAirV);
-		newAirV.start();
-		this.addKeyListener(newAirV);
+		AirVehicle n = new AirVehicle("AirVehicle");
+		NetworkVehicle newNetV = new NetworkVehicle(Type.Air, n.model, n.getX(), n.getY(), n.getZ(), n.getSpeed(), n.getAccel(), n.getDir());
+		sender.sendThisMsgOnQueue(newNetV);
 	}
 	
+	/**
+	 * Converts an Land Vehicle to a Network Vehicle and sends it over the network so the server can distribute the data to all clients.
+	 */
 	private void addLandVehicle() {
-		LandVehicle newLandV = new LandVehicle("Model " + modNum++);
-		allVehicles.add(newLandV);
-		newLandV.start();
-		this.addKeyListener(newLandV);
+		LandVehicle n = new LandVehicle("LandVehicle");
+		NetworkVehicle newNetV = new NetworkVehicle(Type.Land, n.model, n.getX(), n.getY(), n.getZ(), n.getSpeed(), n.getAccel(), n.getDir());
+		sender.sendThisMsgOnQueue(newNetV);
 	}
 	
+	/**
+	 * Kills all the vehicle threads and then calls '.clear()' on the ArrayList of vehicles.
+	 */
 	private void removeAllVehicles() {
 		for(Vehicle v : allVehicles) {
 			v.kill();
 		}
 		allVehicles.clear();
-		modNum = 0;
-	}
-	
-	private void controlNextVehicle() {
-		if(currentVehicleInControl != null) {
-			previousVehicleInControl = currentVehicleInControl;
-			if((allVehicles.indexOf(currentVehicleInControl)) == allVehicles.size() - 1)
-				currentVehicleInControl = allVehicles.get(0);
-			else
-				currentVehicleInControl = allVehicles.get(allVehicles.indexOf(currentVehicleInControl) + 1);
-		} else
-			currentVehicleInControl = allVehicles.get(0);
-		this.removeKeyListener(previousVehicleInControl);
-		this.addKeyListener(currentVehicleInControl);
-	}
-	
-	private void controlPreviousVehicle() {
-		if(currentVehicleInControl != null) {
-			previousVehicleInControl = currentVehicleInControl;
-			if(allVehicles.indexOf(currentVehicleInControl) == 0)
-				currentVehicleInControl = allVehicles.get(allVehicles.size() - 1);
-			else
-				currentVehicleInControl = allVehicles.get(allVehicles.indexOf(currentVehicleInControl) - 1);
-		} else
-			currentVehicleInControl = allVehicles.get(0);
-		this.removeKeyListener(previousVehicleInControl);
-		this.addKeyListener(currentVehicleInControl);
-	}
-	
-	private void getdbVehicles() {
-		List<Object> rawData = db.getObjects(DBVehicle.class);
-		for(Object o : rawData) {
-			DBVehicle vehicle = (DBVehicle) o;
-			if(vehicle.type.equals("Air"))
-				allVehicles.add(new AirVehicle(vehicle.model, vehicle.x, vehicle.y, vehicle.z, vehicle.speed, vehicle.acceleration, vehicle.direction));
-			else if (vehicle.type.equals("Land"))
-				allVehicles.add(new LandVehicle(vehicle.model, vehicle.x, vehicle.y, vehicle.z, vehicle.speed, vehicle.acceleration, vehicle.direction));
-		}
-		
-		System.out.println("Size of array: " + allVehicles.size());
-		
-		for(Vehicle v : allVehicles) {
-			v.start();
-			this.addKeyListener(v);
-		}
 	}
 	
 	public ArrayList<Vehicle> getVehicles() {
@@ -288,18 +253,9 @@ public class DrawHere extends JPanel implements ActionListener, KeyListener, Mou
 		allVehicles = vehicles;
 	}
 	
-	protected void close() {
-		for(Vehicle v : allVehicles) {
-			Object saveable = null;
-			if(v instanceof AirVehicle)
-				saveable = new DBVehicle("Air", v.model, v.x, v.y, v.z, v.speed, v.acceleration, v.direction);
-			else if (v instanceof LandVehicle)
-				saveable = new DBVehicle("Land", v.model, v.x, v.y, v.z, v.speed, v.acceleration, v.direction);
-			if(saveable != null)
-				db.saveNew(saveable);
-			else
-				System.out.println("Vehicle could not save");
-		}
+	public Rectangle getScreenBounds() {
+		Rectangle screen = new Rectangle(screenW, screenH);
+		return screen;
 	}
 	
 	/**
@@ -318,5 +274,78 @@ public class DrawHere extends JPanel implements ActionListener, KeyListener, Mou
 	        bounds = gc.getBounds();
 	    }
 	    return bounds;
+	}
+
+	@Override
+	public void update(Observable arg0, Object event) {
+		System.out.println("Trigger Class: " + arg0.getClass());
+		System.out.println(" event= " + event.toString());
+
+		if (event instanceof NetworkVehicle) {
+			NetworkVehicle e = (NetworkVehicle) event;
+			Vehicle newVehicle;
+			if(e.getType() == Type.Air)
+				newVehicle = new AirVehicle(e.model, e.getX(), e.getY(), e.getZ(), e.getSpeed(), e.getAccel(), e.getDir());
+			else
+				newVehicle = new LandVehicle(e.model, e.getX(), e.getY(), e.getZ(), e.getSpeed(), e.getAccel(), e.getDir());
+			newVehicle.start();
+			this.addKeyListener(newVehicle);
+			synchronized (this) {
+				allVehicles.add(newVehicle); // add to arraylist
+			}
+		}
+
+		if (event instanceof NetworkCommand) {
+			NetworkCommand e = (NetworkCommand) event;
+
+			switch (e.getComm()) {
+			case Add_Vehicle:
+				break;
+			case Change_Movement:
+				break;
+			case No_Command:
+				break;
+			case Remove_Vehicle:
+				break;
+			case Reset:
+				this.removeKeyListener(allVehicles.get(0)); // remove key listener
+				// clear all animals
+				for (Vehicle v : allVehicles) {
+					v.kill(); // force threads to stop
+				}
+				synchronized (this) {
+					allVehicles.clear(); // clear the arraylist
+				}
+				break;
+			default:
+				break;
+			}
+		}
+
+		// Set up key-pressed events
+		if ((allVehicles != null) && (allVehicles.size() > 0)) {
+			this.addKeyListener(allVehicles.get(0)); // arrow keys work on first
+		}
+
+		this.setFocusable(true);
+		this.requestFocusInWindow();
+	}
+	
+	/**
+	 * Used to set all of the vehicles boundaries to the current screen size.
+	 */
+	public void updateScreenSize() {
+		Rectangle screenBounds = getScreenTotalArea(null);
+		screenH = (int) screenBounds.height;
+		screenW = (int) screenBounds.width;
+		for(Vehicle v: allVehicles) {
+			v.setScreenBounds(screenBounds);
+		}
+	}
+
+	@Override
+	public void keyReleased(KeyEvent arg0) {
+		// TODO Auto-generated method stub
+		
 	}
 }

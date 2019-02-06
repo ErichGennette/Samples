@@ -1,18 +1,8 @@
-package display2D;
+package client;
 
-import java.awt.Color;
 import java.awt.Graphics;
+import java.awt.Rectangle;
 import java.awt.event.KeyListener;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.stream.Stream;
-
-import javax.persistence.Entity;
 
 /**
  * The Vehicle class mimics a realistic vehicle. It uses the control values speed, acceleration and direction to manipulate
@@ -20,16 +10,15 @@ import javax.persistence.Entity;
  * @author Erich
  *
  */
-@Entity
 public abstract class Vehicle extends Thread implements KeyListener{
 	
 	//Name of Vehicle
 	public String model;
 	
 	//Control Variables
-	protected double x, y, z, dx, dy, dz;
-	protected double speed, acceleration, direction;
-	protected double pitch = 0;
+	private double x, y, z, dx, dy, dz;
+	private double speed, acceleration, direction;
+	private double pitch = 0;
 	private quadrants quadrant;
 	
 	//Limiters
@@ -48,7 +37,6 @@ public abstract class Vehicle extends Thread implements KeyListener{
 	protected int thickness = 10;
 	
 	//Directions
-	public enum bearings {NORTH, EAST, SOUTH, WEST};
 	public enum quadrants {NE, SE, SW, NW};
 	
 	//Booleans
@@ -63,9 +51,6 @@ public abstract class Vehicle extends Thread implements KeyListener{
 	public void run() {
 		while(running) {
 			this.move();
-//			this.printFullLocation();
-//			this.printLocation();
-//			this.putLocationInText();
 			this.sleep(10);
 		}
 	}
@@ -116,10 +101,9 @@ public abstract class Vehicle extends Thread implements KeyListener{
 	public abstract void collide();
 	
 	/**
-	 * The crash method is called when two vehicles crash into eachother or the vehicle crashes on its own.
-	 * @param them - the other vehicle involved (can be 'this' when crashing on its own).
+	 * The crash method is called when a vehicle gets into a collision that would warrant a crash
 	 */
-	public abstract void crash(Vehicle them);
+	public abstract void crash();
 	
 	/**
 	 * setDxDyDz is a gigantic method which does a lot of the dirty work involved in converting the vehicles direction, speed and acceleration
@@ -373,10 +357,6 @@ public abstract class Vehicle extends Thread implements KeyListener{
 		}
 	}
 	
-	public String toString() {
-		return "Name: " + this.model + " X: " + this.x + " Y: " + this.y;
-	}
-	
 	public double getX() {
 		return this.x;
 	}
@@ -393,8 +373,16 @@ public abstract class Vehicle extends Thread implements KeyListener{
 		this.y = newY;
 	}
 	
+	public double getZ() {
+		return this.z;
+	}
+	
+	public void setZ(double newZ) {
+		this.z = newZ;
+	}
+	
 	public double getSpeed() {
-		return speed;
+		return this.speed;
 	}
 	
 	public void setSpeed(double newSpd) {
@@ -402,11 +390,48 @@ public abstract class Vehicle extends Thread implements KeyListener{
 	}
 	
 	public double getAccel() {
-		return acceleration;
+		return this.acceleration;
 	}
 	
 	public void setAccel(double newAccel) {
 		this.acceleration = newAccel;
+	}
+	
+	public double getDir() {
+		return this.direction;
+	}
+	
+	public void setDir(double newDir) {
+		this.direction = newDir;
+	}
+	
+	public void decrementDir() {
+		this.direction--;
+	}
+	
+	public void incrementDir() {
+		this.direction++;
+	}
+	
+	public double getPitch() {
+		return this.pitch;
+	}
+	
+	public void setPitch(double newPitch) {
+		this.pitch = newPitch;
+	}
+	
+	public void incrementPitch() {
+		this.pitch++;
+	}
+	
+	public void decrementPitch() {
+		this.pitch--;
+	}
+	
+	public void setScreenBounds(Rectangle bounds) {
+		this.xUpLimit = bounds.width;
+		this.yUpLimit = bounds.height;
 	}
 	
 	private void sleep(int milli) {
@@ -415,5 +440,5 @@ public abstract class Vehicle extends Thread implements KeyListener{
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-    }
+	}
 }
